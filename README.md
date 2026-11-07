@@ -31,8 +31,33 @@ export an APK. The preset targets ARM64 and currently uses
 `target/android/little-leopard-canvas.apk` as its local export path.
 Installing an APK may require changing the Fire tablet's installation settings.
 Device compatibility, signing, orientation, and touch behavior still need to
-be tested on the actual tablet. A Web preset also exists, but the Web export
-has not been validated as part of this work.
+be tested on the actual tablet.
+
+### Publish the web app with GitHub Pages
+
+The [Web App workflow](.github/workflows/pages.yml) exports the Web preset
+with Godot 4.7.2 and deploys it to GitHub Pages on pushes to `main`. It can
+also be started manually from **Actions → Publish Web App → Run workflow**
+on `main`.
+
+1. Push the workflow and project changes to GitHub.
+2. In the repository's **Settings → Pages**, set **Build and deployment →
+   Source** to **GitHub Actions**. Enable Actions if needed.
+3. Check the workflow run under **Actions**. After a successful deployment,
+   the expected address for this repository is
+   `https://noahrod.github.io/little-leopard-canvas/`. The deployment job
+   also displays the actual URL.
+
+The Web export uses the Compatibility renderer and has thread support and
+extension support disabled, so it does not require cross-origin isolation
+headers that GitHub Pages cannot configure. The on-screen keyboard option is
+experimental; check profile name entry on the target tablet. Browser graphics
+and touch support, save persistence, and performance must be tested on the
+target Fire tablet. Web profiles and artwork are stored in the browser's
+site-specific storage, separately from the Android app; clearing site data,
+private browsing, or browser storage eviction may remove them. There is no
+built-in backup, sync, or sharing, and this Web build is not configured for
+offline use.
 
 ### Build a test APK with GitHub Actions
 
@@ -43,9 +68,8 @@ workflow artifact and to a new **pre-release**. It uses Java 17 and Android
 SDK tools on a GitHub-hosted Linux runner. The graphical signature test is not
 run in this headless workflow.
 
-1. Put the project in a GitHub repository and push the workflow and project
-   files to the default branch. This workspace has not yet been connected to
-   a Git repository.
+1. Push the workflow and project files to the default branch of the GitHub
+   repository.
 2. Enable GitHub Actions and allow the repository's `GITHUB_TOKEN` to write
    repository contents and create releases. No signing secrets are needed.
 3. In **Actions → Build Android APK → Run workflow**, select the branch or tag
@@ -138,6 +162,7 @@ layout, file persistence, rendering, and touch use need device testing.
 | [`project.godot`](project.godot) | Godot 4.7 project settings, main scene, viewport and mobile renderer. |
 | [`export_presets.cfg`](export_presets.cfg) | Android and Web export presets; inspect in Godot before distributing. |
 | [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml) | Manually builds and publishes a debug-signed Android APK. |
+| [`.github/workflows/pages.yml`](.github/workflows/pages.yml) | Builds and deploys the Web export to GitHub Pages. |
 | [`main.tscn`](main.tscn) | Root `Control`; most UI nodes are created in code. |
 | [`scripts/main.gd`](scripts/main.gd) | Page list, theme/layout, tools, profiles UI, save flow, dialogs, and gallery entry point. |
 | [`scripts/drawing_canvas.gd`](scripts/drawing_canvas.gd) | Input, 840 × 520 raster canvas, fill, brush, stamps, eraser, undo, and signed-image composition. |
