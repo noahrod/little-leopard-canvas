@@ -205,9 +205,13 @@ explicit product decision.
 - [`assets/app_icon/little_leopard_canvas.png`](assets/app_icon/little_leopard_canvas.png)
   is the project icon. [`assets/app_icon/artwork.svg`](assets/app_icon/artwork.svg)
   contains its base illustration; the two title lines are rendered into the
-  PNG separately. The folder also contains 192 × 192 legacy and 432 × 432
-  adaptive foreground/background images, but the current Android preset's
-  launcher-icon fields are empty. The old root `icon.svg` and original school
+  PNG separately. The same icon and school-blue background are used for the
+  Godot boot splash and Web loading screen. The Android system splash uses
+  the padded `android_foreground.png` on the same blue background; its exact
+  appearance depends on the device. The Android preset also uses the blue
+  adaptive launcher background, which supplies the system splash background
+  in the standard APK export. Its other launcher-icon fields remain empty.
+  The old root `icon.svg` and original school
   assets remain unchanged. Launcher appearance still needs verification on
   the Fire tablet.
 - Respect the intended young audience and school branding; use large touch

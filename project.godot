@@ -13,6 +13,8 @@ config_version=5
 config/name="Little Leopard Canvas"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
+boot_splash/bg_color=Color(0.0901961, 0.341176, 0.643137, 1)
+boot_splash/image="res://assets/app_icon/little_leopard_canvas.png"
 config/icon="res://assets/app_icon/little_leopard_canvas.png"
 
 [display]
