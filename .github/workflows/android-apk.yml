@@ -1,0 +1,124 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "New release tag (for example v1.0.0-test.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    env:
+      GODOT_VERSION: "4.7.2"
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Use a version tag such as v1.0.0 or v1.0.0-test.1."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "::error::This tag already exists; choose a new release tag."
+            exit 1
+          else
+            result=$?
+            if [ "$result" -ne 2 ]; then
+              echo "::error::Could not check the remote for existing tags."
+              exit "$result"
+            fi
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager "platform-tools" "build-tools;35.0.1" "platforms;android-35"
+
+      - name: Install Godot and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
+          curl --fail --location --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o "$RUNNER_TEMP/templates.tpz"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          unzip -q "$RUNNER_TEMP/templates.tpz" -d "$RUNNER_TEMP/templates"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          cp -R "$RUNNER_TEMP/templates/templates/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          echo "$RUNNER_TEMP/godot" >> "$GITHUB_PATH"
+
+      - name: Configure Godot and debug signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot"
+          python3 -c 'import json, os, pathlib; p = pathlib.Path.home() / ".config/godot/editor_settings-4.7.tres"; p.write_text("[gd_resource type=\"EditorSettings\" format=3]\n\n[resource]\nexport/android/java_sdk_path = " + json.dumps(os.environ["JAVA_HOME"]) + "\nexport/android/android_sdk_path = " + json.dumps(os.environ["ANDROID_HOME"]) + "\n")'
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Import and test project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          "$godot" --headless --path . --import
+          for test in test_canvas test_profiles test_gallery; do
+            output="$RUNNER_TEMP/$test.log"
+            "$godot" --headless --path . --script "res://tests/$test.gd" --quit-after 600 2>&1 | tee "$output"
+            case "$test" in
+              test_canvas) marker="Canvas tests passed." ;;
+              test_profiles) marker="Profile persistence tests passed." ;;
+              test_gallery) marker="Gallery tests passed." ;;
+            esac
+            grep -Fx "$marker" "$output"
+          done
+
+      - name: Export and verify debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          "Godot_v${GODOT_VERSION}-stable_linux.x86_64" --headless --path . --export-debug Android build/little-leopard-canvas-debug.apk
+          test -s build/little-leopard-canvas-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --verbose build/little-leopard-canvas-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: little-leopard-canvas-debug-apk
+          path: build/little-leopard-canvas-debug.apk
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" build/little-leopard-canvas-debug.apk \
+            --target "$GITHUB_SHA" \
+            --title "Little Leopard Canvas $RELEASE_TAG (test build)" \
+            --prerelease \
+            --notes "Debug-signed APK for testing. Each workflow run generates a new signing key, so it cannot update a previously installed build in place. Uninstalling or clearing the app may delete local artwork and profiles. Back up data first. This build has not been verified on every Fire tablet."

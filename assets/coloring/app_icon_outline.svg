@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g stroke="#111111" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="17" y="17" width="478" height="478" rx="94" fill="white"/>
+    <circle cx="256" cy="215" r="169" fill="white"/>
+    <circle cx="256" cy="215" r="155" fill="white"/>
+    <circle cx="145" cy="133" r="48" fill="white"/>
+    <circle cx="367" cy="133" r="48" fill="white"/>
+    <circle cx="145" cy="133" r="26" fill="white"/>
+    <circle cx="367" cy="133" r="26" fill="white"/>
+    <path d="M125 196 C123 139 175 108 256 113 C337 108 389 139 387 196 C388 254 357 294 311 308 C295 314 282 329 256 337 C230 329 217 314 201 308 C155 294 124 254 125 196Z" fill="white"/>
+    <ellipse cx="256" cy="231" rx="84" ry="62" fill="white"/>
+    <ellipse cx="190" cy="190" rx="13" ry="18" fill="white"/>
+    <ellipse cx="322" cy="190" rx="13" ry="18" fill="white"/>
+    <circle cx="231" cy="145" r="9" fill="white"/>
+    <circle cx="256" cy="135" r="11" fill="white"/>
+    <circle cx="281" cy="145" r="9" fill="white"/>
+    <circle cx="155" cy="210" r="7" fill="white"/>
+    <circle cx="167" cy="232" r="6" fill="white"/>
+    <circle cx="154" cy="247" r="6" fill="white"/>
+    <circle cx="357" cy="210" r="7" fill="white"/>
+    <circle cx="345" cy="232" r="6" fill="white"/>
+    <circle cx="358" cy="247" r="6" fill="white"/>
+    <path d="M232 221 Q256 208 280 221 Q277 239 256 246 Q235 239 232 221Z" fill="white"/>
+    <g fill="none">
+      <path d="M256 245 v11 M256 256 Q240 276 222 258 M256 256 Q272 276 290 258"/>
+      <path d="M193 236 l-46 -7 M194 247 l-47 8 M319 236 l46 -7 M318 247 l47 8"/>
+    </g>
+    <rect x="37" y="356" width="438" height="125" rx="31" fill="white"/>
+    <path d="M66 421 H446" fill="none"/>
+  </g>
+  <g fill="white" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" font-family="sans-serif" font-weight="bold" text-anchor="middle">
+    <text x="256" y="404" font-size="38" textLength="345" lengthAdjust="spacingAndGlyphs">LITTLE LEOPARD</text>
+    <text x="256" y="462" font-size="39" textLength="170" lengthAdjust="spacingAndGlyphs">CANVAS</text>
+  </g>
+</svg>
