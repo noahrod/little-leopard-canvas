@@ -21,25 +21,51 @@ func _run() -> void:
 	assert(scene.get("page_textures")[5] == null)
 	assert(not scene.get("page_buttons")[4].disabled)
 	assert(not scene.get("page_buttons")[5].disabled)
+	assert(not scene.page_dialog.visible)
+	scene._open_pages()
+	assert(scene.page_buttons[0].visible and scene.page_buttons[3].visible)
+	assert(not scene.page_buttons[4].visible)
+	scene._change_page_group(1)
+	assert(not scene.page_buttons[0].visible and scene.page_buttons[4].visible and scene.page_buttons[5].visible)
+	scene._request_page(4)
+	assert(not scene.page_dialog.visible and scene.confirm_dialog.visible)
+	scene._confirmation_canceled()
+	scene.confirm_dialog.hide()
+	await process_frame
+	assert(scene.page_dialog.visible and scene.selected_page == 0)
+	scene.page_dialog.hide()
+	for button in scene.tool_buttons.values():
+		assert(button.text.is_empty() and button.icon != null)
+	for button in scene.stamp_buttons.values():
+		assert(button.text.is_empty() and button.icon != null)
+		assert(button.icon_alignment == HORIZONTAL_ALIGNMENT_CENTER)
+		var image: Image = button.icon.get_image()
+		var bounds := image.get_used_rect()
+		assert(absi(bounds.position.x - (image.get_width() - bounds.end.x)) <= 1)
+		assert(absi(bounds.position.y - (image.get_height() - bounds.end.y)) <= 1)
 	var badge: TextureRect = scene.find_child("AppBadge", true, false)
 	assert(badge.texture.resource_path == "res://assets/app_icon/little_leopard_canvas.png")
-	var header_buttons := ["GALLERY", "UNDO", "CLEAR", "SAVE ART"]
-	var checked_header_buttons := 0
+	var header_buttons := ["HeaderProfile", "HeaderGallery", "HeaderNew", "HeaderUndo", "HeaderClear", "HeaderSave"]
+	for button_name in header_buttons:
+		var header_button: Button = scene.find_child(button_name, true, false)
+		assert(header_button != null and header_button.icon != null)
+		assert(header_button.get_theme_font_size("font_size") == 14)
+		assert(not header_button.tooltip_text.is_empty())
+		assert(header_button.custom_minimum_size.y == 54)
+		for state in ["normal", "hover", "pressed"]:
+			var style: StyleBox = header_button.get_theme_stylebox(state)
+			assert(style.content_margin_left == 12.0)
+			assert(style.content_margin_right == 12.0)
+		assert(header_button.get_theme_constant("h_separation") == 6)
+	var undo_button: Button = scene.find_child("HeaderUndo", true, false)
+	assert(undo_button.text.is_empty() and undo_button.icon_alignment == HORIZONTAL_ALIGNMENT_CENTER)
 	for button in scene.find_children("*", "Button", true, false):
 		if button.is_visible_in_tree():
-			if button.text in header_buttons:
-				checked_header_buttons += 1
-				for state in ["normal", "hover", "pressed"]:
-					var style: StyleBox = button.get_theme_stylebox(state)
-					assert(style.content_margin_left == 12.0)
-					assert(style.content_margin_right == 12.0)
-				assert(button.get_theme_constant("h_separation") == 6)
 			var bounds: Rect2 = button.get_global_rect()
 			if bounds.position.x < 0 or bounds.position.y < 0 or bounds.end.x > scene.size.x or bounds.end.y > scene.size.y:
 				push_error("Button outside layout: %s %s, layout %s" % [button.text, bounds, scene.size])
 				quit(1)
 				return
-	assert(checked_header_buttons == header_buttons.size())
 	canvas.set_page(scene.get("page_textures")[4])
 	canvas.set_tool("fill")
 	canvas.set_color(Color.RED)
@@ -171,5 +197,81 @@ func _run() -> void:
 	assert(canvas.brush_color.is_equal_approx(Color("#784fa3")))
 	scene._toggle_glitter()
 	assert(canvas.glitter)
+	_test_original_outlines(canvas, scene.page_textures)
 	print("Canvas tests passed.")
 	quit()
+
+func _test_original_outlines(canvas: DrawingCanvas, page_textures: Array[Texture2D]) -> void:
+	var page := Image.create(canvas.WIDTH, canvas.HEIGHT, false, Image.FORMAT_RGBA8)
+	page.fill(Color.WHITE)
+	for y in range(canvas.HEIGHT):
+		page.set_pixel(420, y, Color.BLACK)
+	page.set_pixel(419, 260, Color(0.3, 0.3, 0.3))
+	canvas.set_page(ImageTexture.create_from_image(page))
+	canvas.set_brush_size(36.0)
+	canvas.set_color(Color.RED)
+	for glitter_enabled in [false, true]:
+		canvas.set_glitter(glitter_enabled)
+		for selected_tool in ["brush", "stamp", "eraser"]:
+			canvas.set_tool(selected_tool)
+			canvas.set_stamp("star")
+			canvas._start(canvas.size / 2)
+			canvas._finish()
+			assert(canvas.artwork.get_pixel(420, 260).is_equal_approx(Color.BLACK))
+			assert(canvas.artwork.get_pixel(419, 260).is_equal_approx(canvas.base_image.get_pixel(419, 260)))
+			assert(canvas.fill_image.get_pixel(420, 260).is_equal_approx(Color.BLACK))
+			if selected_tool != "eraser":
+				assert(not canvas.artwork.get_pixel(421, 260).is_equal_approx(Color.WHITE))
+			canvas.undo()
+	canvas.set_glitter(false)
+	canvas.set_tool("fill")
+	canvas._start(canvas.size / 2)
+	assert(canvas.history.is_empty())
+	assert(canvas.artwork.get_pixel(420, 260).is_equal_approx(Color.BLACK))
+	canvas._start(Vector2(100.0 * canvas.size.x / canvas.WIDTH, 100.0 * canvas.size.y / canvas.HEIGHT))
+	assert(canvas.artwork.get_pixel(100, 100).is_equal_approx(Color.RED))
+	assert(canvas.artwork.get_pixel(420, 100).is_equal_approx(Color.BLACK))
+	assert(canvas.artwork.get_pixel(500, 100).is_equal_approx(Color.WHITE))
+	canvas.undo()
+	canvas.set_glitter(true)
+	canvas._start(Vector2(100.0 * canvas.size.x / canvas.WIDTH, 100.0 * canvas.size.y / canvas.HEIGHT))
+	assert(canvas.artwork.get_pixel(420, 100).is_equal_approx(Color.BLACK))
+	assert(canvas.artwork.get_pixel(500, 100).is_equal_approx(Color.WHITE))
+	canvas.undo()
+	canvas.set_glitter(false)
+	canvas.text_image = Image.create(30, 20, false, Image.FORMAT_RGBA8)
+	canvas.text_image.fill(Color.RED)
+	canvas.place_text(Vector2(415, 260))
+	assert(canvas.artwork.get_pixel(420, 260).is_equal_approx(Color.BLACK))
+	assert(canvas.fill_image.get_pixel(420, 260).is_equal_approx(Color.BLACK))
+	assert(canvas.artwork.get_pixel(425, 260).is_equal_approx(Color.RED))
+	var output := "user://test_outline.png"
+	assert(canvas.save_artwork(output) == OK)
+	var saved := Image.load_from_file(output)
+	assert(saved.get_pixel(420, 260).is_equal_approx(Color.BLACK))
+	assert(saved.get_pixel(425, 260).is_equal_approx(Color.RED))
+	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(output)) == OK)
+	canvas.undo()
+	assert(canvas.artwork.get_pixel(425, 260).is_equal_approx(Color.WHITE))
+	canvas.set_page(null)
+	canvas.set_tool("brush")
+	canvas._start(canvas.size / 2)
+	canvas._finish()
+	assert(canvas.artwork.get_pixel(420, 260).is_equal_approx(Color.RED))
+	for page_texture in page_textures:
+		if page_texture == null:
+			continue
+		canvas.set_page(page_texture)
+		var line := Vector2i(-1, -1)
+		for y in range(canvas.HEIGHT):
+			for x in range(canvas.WIDTH):
+				if canvas._is_outline(x, y):
+					line = Vector2i(x, y)
+					break
+			if line.x >= 0:
+				break
+		assert(line.x >= 0)
+		var original := canvas.base_image.get_pixelv(line)
+		canvas._start(Vector2(line.x * canvas.size.x / canvas.WIDTH, line.y * canvas.size.y / canvas.HEIGHT))
+		canvas._finish()
+		assert(canvas.artwork.get_pixelv(line).is_equal_approx(original))

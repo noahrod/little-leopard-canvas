@@ -2,13 +2,16 @@ class_name DrawingCanvas
 extends Control
 
 signal drawing_changed
+signal text_placement_requested(position: Vector2)
 
 const WIDTH := 840
 const HEIGHT := 520
 const MAX_UNDO := 12
 const FILL_TOLERANCE := 0.055
+const OUTLINE_DARKNESS_THRESHOLD := 0.5
 
 var base_image: Image
+var outline_mask: Image
 var artwork: Image
 var fill_image: Image
 var artwork_texture: ImageTexture
@@ -21,6 +24,7 @@ var glitter := false
 var drawing := false
 var touch_index := -1
 var last_point := Vector2.ZERO
+var text_image: Image
 
 func _ready() -> void:
 	clip_contents = true
@@ -39,6 +43,13 @@ func set_page(texture: Texture2D) -> void:
 			var target := Vector2i(maxi(1, int(source.get_width() * scale_factor)), maxi(1, int(source.get_height() * scale_factor)))
 			source.resize(target.x, target.y, Image.INTERPOLATE_NEAREST)
 			base_image.blend_rect(source, Rect2i(Vector2i.ZERO, target), Vector2i((WIDTH - target.x) / 2, (HEIGHT - target.y) / 2))
+	outline_mask = Image.create(WIDTH, HEIGHT, false, Image.FORMAT_L8)
+	outline_mask.fill(Color.BLACK)
+	if texture:
+		for y in range(HEIGHT):
+			for x in range(WIDTH):
+				if base_image.get_pixel(x, y).get_luminance() < OUTLINE_DARKNESS_THRESHOLD:
+					outline_mask.set_pixel(x, y, Color.WHITE)
 	artwork = base_image.duplicate()
 	fill_image = base_image.duplicate()
 	history.clear()
@@ -114,6 +125,11 @@ func _start(position: Vector2) -> void:
 	if not Rect2(Vector2.ZERO, size).has_point(position):
 		return
 	var point := _image_point(position)
+	if tool == "text":
+		text_placement_requested.emit(point)
+		return
+	if tool == "fill" and _is_outline(int(point.x), int(point.y)):
+		return
 	_remember()
 	if tool == "fill":
 		_flood_fill(Vector2i(point), brush_color)
@@ -150,7 +166,7 @@ func _dab(center: Vector2) -> void:
 	var max_y := mini(HEIGHT - 1, ceili(center.y + radius))
 	for y in range(min_y, max_y + 1):
 		for x in range(min_x, max_x + 1):
-			if Vector2(x, y).distance_squared_to(center) <= radius * radius:
+			if Vector2(x, y).distance_squared_to(center) <= radius * radius and not _is_outline(x, y):
 				artwork.set_pixel(x, y, base_image.get_pixel(x, y) if tool == "eraser" else _paint_color(x, y))
 				fill_image.set_pixel(x, y, base_image.get_pixel(x, y) if tool == "eraser" else brush_color)
 
@@ -169,8 +185,11 @@ func _paint_color(x: int, y: int) -> Color:
 func _matches(a: Color, b: Color) -> bool:
 	return absf(a.r - b.r) <= FILL_TOLERANCE and absf(a.g - b.g) <= FILL_TOLERANCE and absf(a.b - b.b) <= FILL_TOLERANCE
 
+func _is_outline(x: int, y: int) -> bool:
+	return outline_mask != null and outline_mask.get_pixel(x, y).r > 0.5
+
 func _flood_fill(start: Vector2i, color: Color) -> void:
-	if start.x < 0 or start.x >= WIDTH or start.y < 0 or start.y >= HEIGHT:
+	if start.x < 0 or start.x >= WIDTH or start.y < 0 or start.y >= HEIGHT or _is_outline(start.x, start.y):
 		return
 	var original := fill_image.get_pixelv(start)
 	var marker := Color.BLACK if original.get_luminance() > 0.5 else Color.WHITE
@@ -179,13 +198,13 @@ func _flood_fill(start: Vector2i, color: Color) -> void:
 	var painted_spans: Array[Vector3i] = []
 	while not pending.is_empty():
 		var point: Vector2i = pending.pop_back()
-		if not _matches(fill_image.get_pixelv(point), original):
+		if _is_outline(point.x, point.y) or not _matches(fill_image.get_pixelv(point), original):
 			continue
 		var left := point.x
 		var right := point.x
-		while left > 0 and _matches(fill_image.get_pixel(left - 1, point.y), original):
+		while left > 0 and not _is_outline(left - 1, point.y) and _matches(fill_image.get_pixel(left - 1, point.y), original):
 			left -= 1
-		while right < WIDTH - 1 and _matches(fill_image.get_pixel(right + 1, point.y), original):
+		while right < WIDTH - 1 and not _is_outline(right + 1, point.y) and _matches(fill_image.get_pixel(right + 1, point.y), original):
 			right += 1
 		for x in range(left, right + 1):
 			artwork.set_pixel(x, point.y, color)
@@ -197,7 +216,7 @@ func _flood_fill(start: Vector2i, color: Color) -> void:
 				continue
 			var in_run := false
 			for x in range(left, right + 1):
-				var matches := _matches(fill_image.get_pixel(x, adjacent_y), original)
+				var matches := not _is_outline(x, adjacent_y) and _matches(fill_image.get_pixel(x, adjacent_y), original)
 				if matches and not in_run:
 					pending.append(Vector2i(x, adjacent_y))
 				in_run = matches
@@ -243,9 +262,45 @@ func _draw_stamp(center: Vector2) -> void:
 						Vector2(p.x + 0.22, p.y + 0.55).length_squared() < 0.07 or
 						Vector2(p.x - 0.22, p.y + 0.55).length_squared() < 0.07 or
 						Vector2(p.x - 0.62, p.y + 0.15).length_squared() < 0.07)
-			if inside:
+			if inside and not _is_outline(x, y):
 				artwork.set_pixel(x, y, _paint_color(x, y))
 				fill_image.set_pixel(x, y, brush_color)
+
+func create_stamp_icon(shape: String) -> Texture2D:
+	var sample := DrawingCanvas.new()
+	sample.artwork = Image.create(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8)
+	sample.fill_image = Image.create(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8)
+	sample.artwork.fill(Color.TRANSPARENT)
+	sample.fill_image.fill(Color.TRANSPARENT)
+	sample.brush_color = Color("#1757a4")
+	sample.brush_size = 22.0
+	sample.stamp = shape
+	sample._draw_stamp(Vector2(50, 50))
+	var bounds := sample.artwork.get_used_rect()
+	var centered := Image.create(76, 76, false, Image.FORMAT_RGBA8)
+	centered.fill(Color.TRANSPARENT)
+	centered.blit_rect(sample.artwork, bounds, (Vector2i(76, 76) - bounds.size) / 2)
+	var icon := ImageTexture.create_from_image(centered)
+	sample.free()
+	return icon
+
+func place_text(point: Vector2) -> void:
+	if text_image == null or text_image.is_empty():
+		push_error("Text is not ready to place.")
+		return
+	var origin := Vector2i(roundi(point.x), roundi(point.y - text_image.get_height() / 2.0))
+	_remember()
+	artwork.blend_rect(text_image, Rect2i(Vector2i.ZERO, text_image.get_size()), origin)
+	fill_image.blend_rect(text_image, Rect2i(Vector2i.ZERO, text_image.get_size()), origin)
+	var affected := Rect2i(origin, text_image.get_size()).intersection(Rect2i(0, 0, WIDTH, HEIGHT))
+	for y in range(affected.position.y, affected.end.y):
+		for x in range(affected.position.x, affected.end.x):
+			if _is_outline(x, y):
+				var original := base_image.get_pixel(x, y)
+				artwork.set_pixel(x, y, original)
+				fill_image.set_pixel(x, y, original)
+	_refresh()
+	drawing_changed.emit()
 
 func _is_leopard_shape(point: Vector2) -> bool:
 	var head := Vector2(point.x / 0.8, point.y / 0.72).length_squared() <= 1.0

@@ -26,6 +26,12 @@ var stamp_buttons: Dictionary = {}
 var size_buttons: Array[Button] = []
 var page_buttons: Array[Button] = []
 var page_textures: Array[Texture2D] = []
+var page_dialog: AcceptDialog
+var page_start := 0
+var page_previous: Button
+var page_next: Button
+var text_dialog: ConfirmationDialog
+var text_input: LineEdit
 var selected_tool := "brush"
 var selected_stamp := "paw"
 var selected_color := 0
@@ -111,28 +117,22 @@ func _build_interface() -> void:
 	artist_caption = _label("ART CLUB  •  Choose an artist profile", 14, GOLD)
 	artist_caption.clip_text = true
 	heading.add_child(artist_caption)
-	profile_button = _button("PROFILES", Vector2(105, 54), Color("#e8f3ff"), 14)
-	_pad_header_button(profile_button)
+	profile_button = _header_button("PROFILES", "profile", Vector2(120, 54), Color("#e8f3ff"), "Choose or edit an artist")
 	profile_button.pressed.connect(_open_profiles)
 	header.add_child(profile_button)
-	var gallery_button := _button("GALLERY", Vector2(110, 54), Color("#e8f3ff"), 14)
-	gallery_button.icon = load("res://assets/ui/gallery.svg")
-	_pad_header_button(gallery_button)
+	var gallery_button := _header_button("GALLERY", "gallery", Vector2(120, 54), Color("#e8f3ff"), "View saved artwork")
 	gallery_button.pressed.connect(_open_gallery)
 	header.add_child(gallery_button)
-	var undo_button := _button("UNDO", Vector2(100, 54), Color("#e8f3ff"))
-	undo_button.icon = load("res://assets/ui/undo.svg")
-	_pad_header_button(undo_button)
+	var new_button := _header_button("NEW", "new", Vector2(90, 54), Color("#e8f3ff"), "Choose a new page")
+	new_button.pressed.connect(_open_pages)
+	header.add_child(new_button)
+	var undo_button := _header_button("", "undo", Vector2(58, 54), Color("#e8f3ff"), "Undo last change")
 	undo_button.pressed.connect(_on_undo)
 	header.add_child(undo_button)
-	var clear_button := _button("CLEAR", Vector2(100, 54), Color("#fff0e8"))
-	clear_button.icon = load("res://assets/ui/clear.svg")
-	_pad_header_button(clear_button)
+	var clear_button := _header_button("CLEAR", "clear", Vector2(105, 54), Color("#fff0e8"), "Clear the page")
 	clear_button.pressed.connect(_ask_clear)
 	header.add_child(clear_button)
-	var save_button := _button("SAVE ART", Vector2(130, 54), GOLD)
-	save_button.icon = load("res://assets/ui/save.svg")
-	_pad_header_button(save_button)
+	var save_button := _header_button("SAVE ART", "save", Vector2(130, 54), GOLD, "Save your artwork")
 	save_button.pressed.connect(_on_save)
 	header.add_child(save_button)
 
@@ -142,22 +142,25 @@ func _build_interface() -> void:
 	layout.add_child(body)
 
 	var tools := _panel(Color("#f7fbff"), 18)
-	tools.custom_minimum_size.x = 130
+	tools.custom_minimum_size.x = 82
 	body.add_child(tools)
 	var tool_list := VBoxContainer.new()
 	tool_list.add_theme_constant_override("separation", 8)
 	tools.add_child(tool_list)
-	tool_list.add_child(_label("TOOLS", 17, INK, HORIZONTAL_ALIGNMENT_CENTER))
-	for entry in [["brush", "BRUSH"], ["fill", "FILL"], ["stamp", "STAMP"], ["eraser", "ERASER"]]:
-		var button := _button(entry[1], Vector2(108, 65), Color.WHITE)
+	for entry in [["brush", "Brush"], ["fill", "Fill"], ["stamp", "Stamp"], ["eraser", "Eraser"], ["text", "Text"]]:
+		var button := _button("", Vector2(62, 62), Color.WHITE)
 		button.icon = load("res://assets/ui/" + entry[0] + ".svg")
-		button.add_theme_constant_override("h_separation", 3)
-		button.pressed.connect(_select_tool.bind(entry[0]))
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		button.add_theme_constant_override("icon_max_width", 42)
+		button.tooltip_text = entry[1]
+		if entry[0] == "text":
+			button.pressed.connect(_open_text)
+		else:
+			button.pressed.connect(_select_tool.bind(entry[0]))
 		tool_list.add_child(button)
 		tool_buttons[entry[0]] = button
-	var tip := _label("Tap or drag\non your page!", 14, BLUE, HORIZONTAL_ALIGNMENT_CENTER)
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tool_list.add_child(tip)
 
 	var board := _panel(Color("#ffdc62"), 18)
 	board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -176,6 +179,7 @@ func _build_interface() -> void:
 	canvas.name = "DrawingCanvas"
 	canvas.mouse_filter = Control.MOUSE_FILTER_STOP
 	aspect.add_child(canvas)
+	canvas.text_placement_requested.connect(_place_text)
 
 	var choices := _panel(Color("#f7fbff"), 18)
 	choices.custom_minimum_size.x = 218
@@ -221,36 +225,17 @@ func _build_interface() -> void:
 	stamps.add_theme_constant_override("v_separation", 4)
 	choice_list.add_child(stamps)
 	for entry in [["paw", "PAW"], ["star", "STAR"], ["heart", "HEART"], ["leopard", "LEOPARD"], ["sun", "SUN"], ["flower", "FLOWER"]]:
-		var button := _button(entry[1], Vector2(59, 40), Color.WHITE, 10)
+		var button := _button("", Vector2(59, 48), Color.WHITE)
+		button.icon = canvas.create_stamp_icon(entry[0])
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		button.add_theme_constant_override("icon_max_width", 36)
+		button.tooltip_text = entry[1]
 		button.pressed.connect(_select_stamp.bind(entry[0]))
 		stamps.add_child(button)
 		stamp_buttons[entry[0]] = button
 
-	var footer := _panel(Color("#fff8df"), 16)
-	footer.custom_minimum_size.y = 116
-	layout.add_child(footer)
-	var footer_row := HBoxContainer.new()
-	footer_row.add_theme_constant_override("separation", 10)
-	footer.add_child(footer_row)
-	var page_caption := VBoxContainer.new()
-	page_caption.custom_minimum_size.x = 115
-	footer_row.add_child(page_caption)
-	page_caption.add_child(_label("PICK A", 17, BLUE))
-	page_caption.add_child(_label("PAGE!", 24, RED))
-	for i in PAGE_NAMES.size():
-		var page := _button(PAGE_NAMES[i].to_upper(), Vector2(115, 82), Color.WHITE, 13)
-		page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if page_textures[i]:
-			page.icon = page_textures[i]
-			page.expand_icon = true
-			page.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			page.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		elif not PAGE_PATHS[i].is_empty():
-			page.disabled = true
-			page.tooltip_text = "This page could not be loaded."
-		page.pressed.connect(_request_page.bind(i))
-		footer_row.add_child(page)
-		page_buttons.append(page)
 	status_label = _label("Let's make art!", 14, Color.WHITE)
 	status_label.custom_minimum_size.y = 20
 	layout.add_child(status_label)
@@ -259,6 +244,7 @@ func _build_interface() -> void:
 	confirm_dialog.title = "Are you sure?"
 	confirm_dialog.ok_button_text = "Yes"
 	confirm_dialog.confirmed.connect(_confirmed)
+	confirm_dialog.canceled.connect(_confirmation_canceled)
 	add_child(confirm_dialog)
 
 	color_dialog = ConfirmationDialog.new()
@@ -293,11 +279,113 @@ func _build_interface() -> void:
 	color_dialog.confirmed.connect(_apply_custom_color)
 	add_child(color_dialog)
 	_build_profile_dialog()
+	_build_page_dialog()
+	_build_text_dialog()
 	gallery = ArtGallery.new()
 	add_child(gallery)
 
 func _open_gallery() -> void:
 	gallery.open_gallery()
+
+func _build_page_dialog() -> void:
+	page_dialog = AcceptDialog.new()
+	page_dialog.title = "Pick a new page"
+	page_dialog.ok_button_text = "BACK TO DRAWING"
+	add_child(page_dialog)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	page_dialog.add_child(row)
+	page_previous = _button("<", Vector2(54, 100), Color("#e8f3ff"), 28)
+	page_previous.tooltip_text = "Previous pages"
+	page_previous.pressed.connect(_change_page_group.bind(-1))
+	row.add_child(page_previous)
+	for i in PAGE_NAMES.size():
+		var page := _button(PAGE_NAMES[i].to_upper(), Vector2(115, 100), Color.WHITE, 13)
+		if page_textures[i]:
+			page.icon = page_textures[i]
+			page.expand_icon = true
+			page.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			page.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		elif not PAGE_PATHS[i].is_empty():
+			page.disabled = true
+			page.tooltip_text = "This page could not be loaded."
+		page.pressed.connect(_request_page.bind(i))
+		row.add_child(page)
+		page_buttons.append(page)
+	page_next = _button(">", Vector2(54, 100), Color("#e8f3ff"), 28)
+	page_next.tooltip_text = "More pages"
+	page_next.pressed.connect(_change_page_group.bind(1))
+	row.add_child(page_next)
+	_update_page_group()
+
+func _update_page_group() -> void:
+	for i in page_buttons.size():
+		page_buttons[i].visible = i >= page_start and i < page_start + 4
+	page_previous.disabled = page_start == 0
+	page_next.disabled = page_start + 4 >= page_buttons.size()
+
+func _change_page_group(direction: int) -> void:
+	page_start = clampi(page_start + direction * 4, 0, 4)
+	_update_page_group()
+
+func _open_pages() -> void:
+	page_start = (selected_page / 4) * 4
+	_update_page_group()
+	page_dialog.popup_centered()
+
+func _build_text_dialog() -> void:
+	text_dialog = ConfirmationDialog.new()
+	text_dialog.title = "Add words to your art"
+	text_dialog.ok_button_text = "PLACE WORDS"
+	add_child(text_dialog)
+	text_input = LineEdit.new()
+	text_input.placeholder_text = "Type your words"
+	text_input.max_length = 60
+	text_input.custom_minimum_size = Vector2(380, 54)
+	text_dialog.add_child(text_input)
+	text_dialog.confirmed.connect(_prepare_text)
+
+func _open_text() -> void:
+	text_dialog.popup_centered()
+	text_input.grab_focus()
+
+func _prepare_text() -> void:
+	var words := text_input.text.strip_edges()
+	if words.is_empty():
+		status_label.text = "Type some words before placing text."
+		return
+	var viewport := SubViewport.new()
+	viewport.transparent_bg = true
+	viewport.size = Vector2i(CanvasScript.WIDTH, 96)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	viewport.disable_3d = true
+	var label := Label.new()
+	label.text = words
+	label.add_theme_font_size_override("font_size", 40)
+	label.add_theme_color_override("font_color", canvas.brush_color)
+	label.size = Vector2(CanvasScript.WIDTH, 96)
+	label.clip_text = true
+	viewport.add_child(label)
+	canvas.add_child(viewport)
+	await RenderingServer.frame_post_draw
+	var image := viewport.get_texture().get_image()
+	viewport.queue_free()
+	if image == null or image.is_empty():
+		push_error("Could not render text for the canvas.")
+		status_label.text = "Could not prepare your words. Please try again."
+		return
+	image.convert(Image.FORMAT_RGBA8)
+	var used := image.get_used_rect()
+	if used.size == Vector2i.ZERO:
+		push_error("Rendered text was empty.")
+		status_label.text = "Could not prepare your words. Please try again."
+		return
+	canvas.text_image = image.get_region(used)
+	_select_tool("text")
+
+func _place_text(point: Vector2) -> void:
+	canvas.place_text(point)
+	status_label.text = "Tap again to add your words, or choose another tool."
 
 func _build_profile_dialog() -> void:
 	profile_dialog = AcceptDialog.new()
@@ -308,7 +396,7 @@ func _build_profile_dialog() -> void:
 	content.custom_minimum_size = Vector2(430, 0)
 	content.add_theme_constant_override("separation", 10)
 	profile_dialog.add_child(content)
-	content.add_child(_label("Choose an artist", 18, INK))
+	content.add_child(_label("Choose an artist", 18, Color.WHITE))
 	profile_picker = OptionButton.new()
 	profile_picker.custom_minimum_size.y = 48
 	profile_picker.item_selected.connect(_profile_chosen)
@@ -316,13 +404,13 @@ func _build_profile_dialog() -> void:
 	var new_button := _button("NEW ARTIST", Vector2(0, 48), GOLD)
 	new_button.pressed.connect(_new_profile)
 	content.add_child(new_button)
-	content.add_child(_label("Name", 18, INK))
+	content.add_child(_label("Name", 18, Color.WHITE))
 	profile_name_input = LineEdit.new()
 	profile_name_input.placeholder_text = "Type your name"
 	profile_name_input.max_length = ProfileStore.MAX_NAME_LENGTH
 	profile_name_input.custom_minimum_size.y = 48
 	content.add_child(profile_name_input)
-	content.add_child(_label("Grade", 18, INK))
+	content.add_child(_label("Grade", 18, Color.WHITE))
 	grade_picker = OptionButton.new()
 	grade_picker.custom_minimum_size.y = 48
 	grade_picker.add_item("Choose your grade")
@@ -338,13 +426,11 @@ func _build_profile_dialog() -> void:
 	var delete_profile := _button("DELETE", Vector2(120, 48), Color("#fff0e8"))
 	delete_profile.pressed.connect(_ask_delete_profile)
 	actions.add_child(delete_profile)
-	profile_message = _label("Choose a profile or create a new artist.", 15, INK)
-	profile_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	profile_message = _label("Choose a profile or create a new artist.", 15, Color.WHITE)
+	profile_message.clip_text = true
 	content.add_child(profile_message)
 
 func _refresh_profile_button() -> void:
-	profile_button.tooltip_text = "Choose or edit an artist"
-	profile_button.text = "ARTIST ✓" if profile_store.selected >= 0 else "PROFILES"
 	if profile_store.selected >= 0:
 		var artist: Dictionary = profile_store.profiles[profile_store.selected]
 		artist_caption.text = "ARTIST: " + artist["name"] + "  •  " + artist["grade"]
@@ -499,6 +585,16 @@ func _pad_header_button(button: Button) -> void:
 		button.add_theme_stylebox_override(state, style)
 	button.add_theme_constant_override("h_separation", 6)
 
+func _header_button(text: String, icon_name: String, minimum: Vector2, color: Color, hint: String) -> Button:
+	var button := _button(text, minimum, color, 14)
+	button.name = "Header" + icon_name.capitalize()
+	button.icon = load("res://assets/ui/" + icon_name + ".svg")
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER if text.is_empty() else HORIZONTAL_ALIGNMENT_LEFT
+	button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	button.tooltip_text = hint
+	_pad_header_button(button)
+	return button
+
 func _label(text: String, font_size: int, color: Color, alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -516,7 +612,7 @@ func _select_tool(value: String) -> void:
 	canvas.set_tool(value)
 	for key in tool_buttons:
 		_mark(tool_buttons[key], Color("#d6edff") if key == value else Color.WHITE, key == value)
-	var hints := {"brush": "Brush: drag your finger to paint!", "fill": "Fill: tap an area to color it!", "stamp": "Stamp: tap to make a shape!", "eraser": "Eraser: rub away your marks!"}
+	var hints := {"brush": "Brush: drag your finger to paint!", "fill": "Fill: tap an area to color it!", "stamp": "Stamp: tap to make a shape!", "eraser": "Eraser: rub away your marks!", "text": "Tap your page to place your words!"}
 	status_label.text = hints[value]
 
 func _select_color(index: int) -> void:
@@ -566,12 +662,17 @@ func _select_stamp(value: String) -> void:
 		_select_tool("stamp")
 
 func _request_page(index: int) -> void:
-	if index == selected_page:
-		return
 	pending_page = index
 	confirm_action = "page"
 	confirm_dialog.dialog_text = "Start a new page? Your current drawing will be cleared. Save it first if you want to keep it."
+	page_dialog.hide()
 	confirm_dialog.popup_centered()
+
+func _confirmation_canceled() -> void:
+	if confirm_action == "page":
+		pending_page = -1
+		page_dialog.popup_centered.call_deferred()
+	confirm_action = ""
 
 func _select_page(index: int) -> void:
 	selected_page = index
@@ -590,6 +691,7 @@ func _confirmed() -> void:
 		status_label.text = "A fresh page! Undo if you change your mind."
 	elif confirm_action == "page" and pending_page >= 0:
 		_select_page(pending_page)
+		page_dialog.hide()
 		status_label.text = "New page ready! Let's make art."
 		pending_page = -1
 	elif confirm_action == "delete_profile":

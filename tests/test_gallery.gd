@@ -16,9 +16,14 @@ func _run() -> void:
 	canvas.set_page(null)
 	canvas.artwork.set_pixel(50, 50, Color.RED)
 	scene._open_gallery()
+	await process_frame
+	await process_frame
 	assert(gallery.files.is_empty())
 	assert(gallery.message.text.contains("No artwork yet"))
 	assert(gallery.previous_button.disabled and gallery.next_button.disabled)
+	assert(gallery.export_button.disabled)
+	assert(gallery.size.y <= 900)
+	assert(gallery.next_button.get_global_rect().end.y < gallery.size.y)
 
 	var old := Image.create(20, 10, false, Image.FORMAT_RGBA8)
 	old.fill(Color.RED)
@@ -36,6 +41,11 @@ func _run() -> void:
 	assert(gallery.current_index == 0)
 	assert(gallery.previous_button.disabled and not gallery.next_button.disabled)
 	assert(gallery.preview.texture.get_image().get_pixel(0, 0).is_equal_approx(Color.BLUE))
+	assert(not gallery.export_button.disabled)
+	var exported_path := ProjectSettings.globalize_path(folder.path_join("exported.png"))
+	gallery._export_to_path(exported_path)
+	assert(FileAccess.file_exists(exported_path))
+	assert(Image.load_from_file(exported_path).get_pixel(0, 0).is_equal_approx(Color.BLUE))
 	gallery._show_next()
 	assert(gallery.current_index == 1)
 	assert(not gallery.previous_button.disabled and gallery.next_button.disabled)
@@ -51,13 +61,14 @@ func _run() -> void:
 	gallery.refresh()
 	assert(gallery.files.size() == 3)
 	assert(gallery.preview.texture == null)
+	assert(gallery.export_button.disabled)
 	assert(gallery.message.text.contains("could not be opened"))
 	gallery._show_next()
 	assert(gallery.preview.texture != null)
 	gallery.hide()
 	assert(canvas.artwork.get_pixel(50, 50).is_equal_approx(Color.RED))
 
-	for path in [old_path, new_path, unrelated_path, invalid_path]:
+	for path in [old_path, new_path, unrelated_path, invalid_path, exported_path]:
 		assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK)
 	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(folder)) == OK)
 	print("Gallery tests passed.")

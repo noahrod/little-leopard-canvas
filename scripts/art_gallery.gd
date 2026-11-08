@@ -8,12 +8,13 @@ var preview: TextureRect
 var message: Label
 var previous_button: Button
 var next_button: Button
+var export_button: Button
+var export_dialog: FileDialog
 
 func _ready() -> void:
 	title = "My Art Gallery"
 	ok_button_text = "BACK TO DRAWING"
 	var layout := VBoxContainer.new()
-	layout.custom_minimum_size = Vector2(740, 540)
 	layout.add_theme_constant_override("separation", 8)
 	add_child(layout)
 
@@ -24,7 +25,8 @@ func _ready() -> void:
 	layout.add_child(title_label)
 
 	preview = TextureRect.new()
-	preview.custom_minimum_size = Vector2(720, 410)
+	preview.custom_minimum_size = Vector2(100, 100)
+	preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -32,8 +34,8 @@ func _ready() -> void:
 
 	message = Label.new()
 	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message.custom_minimum_size.y = 42
+	message.clip_text = true
+	message.custom_minimum_size.y = 30
 	layout.add_child(message)
 
 	var navigation := HBoxContainer.new()
@@ -41,19 +43,30 @@ func _ready() -> void:
 	navigation.add_theme_constant_override("separation", 24)
 	layout.add_child(navigation)
 	previous_button = Button.new()
-	previous_button.text = "◀  NEWER"
+	previous_button.text = "<  NEWER"
 	previous_button.custom_minimum_size = Vector2(180, 54)
 	previous_button.pressed.connect(_show_previous)
 	navigation.add_child(previous_button)
+	export_button = Button.new()
+	export_button.text = "EXPORT"
+	export_button.custom_minimum_size = Vector2(150, 54)
+	export_button.pressed.connect(_export_current)
+	navigation.add_child(export_button)
 	next_button = Button.new()
-	next_button.text = "OLDER  ▶"
+	next_button.text = "OLDER  >"
 	next_button.custom_minimum_size = Vector2(180, 54)
 	next_button.pressed.connect(_show_next)
 	navigation.add_child(next_button)
+	export_dialog = FileDialog.new()
+	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	export_dialog.add_filter("*.png", "PNG image")
+	export_dialog.file_selected.connect(_export_to_path)
+	add_child(export_dialog)
 
 func open_gallery() -> void:
 	refresh()
-	popup_centered()
+	popup_centered_ratio(0.9)
 
 func refresh() -> void:
 	files.clear()
@@ -109,6 +122,51 @@ func _show_artwork(index: int) -> void:
 func _update_navigation() -> void:
 	previous_button.disabled = current_index <= 0
 	next_button.disabled = current_index < 0 or current_index >= files.size() - 1
+	export_button.disabled = preview.texture == null
+
+func _export_current() -> void:
+	if current_index < 0 or preview.texture == null:
+		message.text = "Choose a picture that can be opened first."
+		return
+	var path: String = files[current_index]["path"]
+	if OS.has_feature("web"):
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			_export_error("Could not read the saved picture.")
+			return
+		var bytes := file.get_buffer(file.get_length())
+		if bytes.is_empty():
+			_export_error("The saved picture is empty.")
+			return
+		JavaScriptBridge.download_buffer(bytes, path.get_file(), "image/png")
+		message.text = "Download requested. Check your browser's downloads."
+	elif OS.has_feature("android"):
+		var error := ArtExport.save_to_android_photos(path)
+		if not error.is_empty():
+			_export_error(error)
+			return
+		message.text = "Saved to Pictures / Little Leopard Canvas. Open your Photos app to share it."
+	else:
+		export_dialog.current_file = path.get_file()
+		export_dialog.popup_centered_ratio(0.8)
+
+func _export_to_path(destination: String) -> void:
+	if current_index < 0:
+		_export_error("Choose a picture to export.")
+		return
+	var source: String = files[current_index]["path"]
+	if ProjectSettings.globalize_path(source) == destination:
+		_export_error("Choose a different destination for the exported picture.")
+		return
+	var error := DirAccess.copy_absolute(ProjectSettings.globalize_path(source), destination)
+	if error != OK:
+		_export_error("Could not export the picture: " + error_string(error))
+		return
+	message.text = "Picture exported. You can share it from your files."
+
+func _export_error(details: String) -> void:
+	push_error("Artwork export failed: " + details)
+	message.text = details + " Ask an adult for help."
 
 func _show_previous() -> void:
 	_show_artwork(current_index - 1)
