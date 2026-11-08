@@ -6,6 +6,8 @@ static func save_to_android_photos(path: String) -> String:
 	if runtime == null:
 		return "Android photo export is not available on this device."
 	var version := JavaClassWrapper.wrap("android.os.Build$VERSION")
+	if version == null:
+		return "Could not check the Android version."
 	if version.SDK_INT < 29:
 		return "Photo export requires Android 10 or newer on this build."
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -16,17 +18,25 @@ static func save_to_android_photos(path: String) -> String:
 		return "The saved artwork is empty."
 
 	var activity = runtime.getActivity()
-	if activity == null or JavaClassWrapper.get_exception() != null:
+	var exception = JavaClassWrapper.get_exception()
+	if exception != null or activity == null:
 		return "Could not access Android photo storage."
 	var resolver = activity.getContentResolver()
-	if resolver == null or JavaClassWrapper.get_exception() != null:
+	exception = JavaClassWrapper.get_exception()
+	if exception != null or resolver == null:
 		return "Could not access Android photo storage."
 	var values_class := JavaClassWrapper.wrap("android.content.ContentValues")
 	var uri_class := JavaClassWrapper.wrap("android.net.Uri")
 	var integer_class := JavaClassWrapper.wrap("java.lang.Integer")
+	if values_class == null or uri_class == null or integer_class == null:
+		return "Could not load Android photo storage."
 	var values = values_class.ContentValues()
+	exception = JavaClassWrapper.get_exception()
+	if exception != null or values == null:
+		return "Could not prepare Android photo storage."
 	var uri = uri_class.parse("content://media/external/images/media")
-	if values == null or uri == null or JavaClassWrapper.get_exception() != null:
+	exception = JavaClassWrapper.get_exception()
+	if exception != null or uri == null:
 		return "Could not prepare Android photo storage."
 	values.put("_display_name", path.get_file())
 	if JavaClassWrapper.get_exception() != null:
@@ -34,33 +44,50 @@ static func save_to_android_photos(path: String) -> String:
 	values.put("mime_type", "image/png")
 	if JavaClassWrapper.get_exception() != null:
 		return "Could not set the picture format."
-	values.put("relative_path", "Pictures/Little Leopard Canvas")
+	values.put("relative_path", "DCIM/Camera")
 	if JavaClassWrapper.get_exception() != null:
 		return "Could not set the pictures folder."
-	values.put("is_pending", integer_class.valueOf(1))
+	var pending = integer_class.valueOf(1)
+	if JavaClassWrapper.get_exception() != null:
+		return "Could not prepare the picture."
+	values.put("is_pending", pending)
 	if JavaClassWrapper.get_exception() != null:
 		return "Could not prepare the picture."
 	var saved_uri = resolver.insert(uri, values)
-	if saved_uri == null or JavaClassWrapper.get_exception() != null:
+	exception = JavaClassWrapper.get_exception()
+	if exception != null or saved_uri == null:
 		return "Could not create a picture in Android Photos."
 	var stream = resolver.openOutputStream(saved_uri)
-	if stream == null or JavaClassWrapper.get_exception() != null:
-		resolver.delete(saved_uri, null, null)
+	exception = JavaClassWrapper.get_exception()
+	if exception != null or stream == null:
+		_remove_pending(resolver, saved_uri)
 		return "Could not open the picture for writing."
 	stream.write(bytes)
 	var write_error := JavaClassWrapper.get_exception()
 	stream.close()
 	var close_error := JavaClassWrapper.get_exception()
 	if write_error != null or close_error != null:
-		resolver.delete(saved_uri, null, null)
+		_remove_pending(resolver, saved_uri)
 		return "Could not write the picture to Android Photos."
 	values.clear()
-	values.put("is_pending", integer_class.valueOf(0))
 	if JavaClassWrapper.get_exception() != null:
-		resolver.delete(saved_uri, null, null)
+		_remove_pending(resolver, saved_uri)
+		return "Could not finish saving the picture."
+	pending = integer_class.valueOf(0)
+	if JavaClassWrapper.get_exception() != null:
+		_remove_pending(resolver, saved_uri)
+		return "Could not finish saving the picture."
+	values.put("is_pending", pending)
+	if JavaClassWrapper.get_exception() != null:
+		_remove_pending(resolver, saved_uri)
 		return "Could not finish saving the picture."
 	var updated: int = resolver.update(saved_uri, values, null, null)
 	if JavaClassWrapper.get_exception() != null or updated != 1:
-		resolver.delete(saved_uri, null, null)
+		_remove_pending(resolver, saved_uri)
 		return "Could not finish saving the picture."
 	return ""
+
+static func _remove_pending(resolver, uri) -> void:
+	var removed: int = resolver.delete(uri, null, null)
+	if JavaClassWrapper.get_exception() != null or removed != 1:
+		push_error("Could not remove the incomplete Android picture.")

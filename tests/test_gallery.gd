@@ -7,10 +7,25 @@ func _run() -> void:
 	var folder := "user://gallery_test_%s" % Time.get_ticks_usec()
 	assert(DirAccess.make_dir_absolute(ProjectSettings.globalize_path(folder)) == OK)
 	var scene: Control = load("res://main.tscn").instantiate()
+	scene.suppress_setup = true
 	root.add_child(scene)
 	await process_frame
 	await process_frame
 	var gallery: ArtGallery = scene.gallery
+	assert(gallery.theme.get_icon("close", "Window").get_width() >= 48)
+	assert(gallery.theme.get_constant("buttons_min_height", "AcceptDialog") >= 54)
+	assert(scene.profile_dialog.theme.get_icon("close", "Window").get_width() >= 48)
+	assert(scene.profile_dialog.theme.get_constant("buttons_min_height", "AcceptDialog") >= 54)
+	for dialog in [gallery, scene.profile_dialog]:
+		var title_height: int = dialog.theme.get_constant("title_height", "Window")
+		var close_y: int = dialog.theme.get_constant("close_v_offset", "Window")
+		var close_x: int = dialog.theme.get_constant("close_h_offset", "Window")
+		var close_size: Vector2 = dialog.theme.get_icon("close", "Window").get_size()
+		var border: StyleBoxFlat = dialog.theme.get_stylebox("embedded_border", "Window")
+		assert(title_height >= 64 and border.expand_margin_top >= title_height)
+		assert(close_y <= title_height and close_y >= close_size.y)
+		assert(close_x >= close_size.x)
+		assert(dialog.theme.get_font_size("title_font_size", "Window") >= 24)
 	gallery.storage_path = folder
 	var canvas: DrawingCanvas = scene.canvas
 	canvas.set_page(null)
@@ -18,6 +33,7 @@ func _run() -> void:
 	scene._open_gallery()
 	await process_frame
 	await process_frame
+	assert(gallery.get_ok_button().size.y >= 54)
 	assert(gallery.files.is_empty())
 	assert(gallery.message.text.contains("No artwork yet"))
 	assert(gallery.previous_button.disabled and gallery.next_button.disabled)

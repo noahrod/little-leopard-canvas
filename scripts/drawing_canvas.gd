@@ -25,6 +25,12 @@ var drawing := false
 var touch_index := -1
 var last_point := Vector2.ZERO
 var text_image: Image
+var zoom_factor := 1.0
+var zoom_center := Vector2(WIDTH / 2.0, HEIGHT / 2.0)
+var zoom_dragging := false
+var zoom_moved := false
+var zoom_last_position := Vector2.ZERO
+var zoom_start_position := Vector2.ZERO
 
 func _ready() -> void:
 	clip_contents = true
@@ -55,6 +61,9 @@ func set_page(texture: Texture2D) -> void:
 	history.clear()
 	drawing = false
 	touch_index = -1
+	zoom_dragging = false
+	zoom_factor = 1.0
+	zoom_center = Vector2(WIDTH / 2.0, HEIGHT / 2.0)
 	_refresh()
 	drawing_changed.emit()
 
@@ -111,18 +120,38 @@ func _gui_input(event: InputEvent) -> void:
 		else:
 			_finish()
 		accept_event()
-	elif event is InputEventMouseMotion and not DisplayServer.is_touchscreen_available() and drawing:
+	elif event is InputEventMouseMotion and not DisplayServer.is_touchscreen_available() and (drawing or zoom_dragging):
 		_move(event.position)
 		accept_event()
 
 func _image_point(position: Vector2) -> Vector2:
+	var source := _visible_image_rect()
 	return Vector2(
-		clampf(position.x * WIDTH / size.x, 0.0, WIDTH - 1.0),
-		clampf(position.y * HEIGHT / size.y, 0.0, HEIGHT - 1.0)
+		clampf(source.position.x + position.x * source.size.x / size.x, 0.0, WIDTH - 1.0),
+		clampf(source.position.y + position.y * source.size.y / size.y, 0.0, HEIGHT - 1.0)
 	)
+
+func _visible_image_rect() -> Rect2:
+	var visible_size := Vector2(WIDTH, HEIGHT) / zoom_factor
+	return Rect2(zoom_center - visible_size / 2.0, visible_size)
+
+func set_zoom(value: float, center: Vector2) -> void:
+	zoom_factor = clampf(value, 1.0, 4.0)
+	var half_size := Vector2(WIDTH, HEIGHT) / (zoom_factor * 2.0)
+	zoom_center = Vector2(
+		clampf(center.x, half_size.x, WIDTH - half_size.x),
+		clampf(center.y, half_size.y, HEIGHT - half_size.y)
+	)
+	queue_redraw()
 
 func _start(position: Vector2) -> void:
 	if not Rect2(Vector2.ZERO, size).has_point(position):
+		return
+	if tool == "zoom":
+		zoom_dragging = true
+		zoom_moved = false
+		zoom_last_position = position
+		zoom_start_position = position
 		return
 	var point := _image_point(position)
 	if tool == "text":
@@ -143,6 +172,15 @@ func _start(position: Vector2) -> void:
 	drawing_changed.emit()
 
 func _move(position: Vector2) -> void:
+	if zoom_dragging:
+		if not zoom_moved and position.distance_to(zoom_start_position) >= 8.0:
+			zoom_moved = true
+			zoom_last_position = zoom_start_position
+		if zoom_moved:
+			var delta := position - zoom_last_position
+			set_zoom(zoom_factor, zoom_center - delta * _visible_image_rect().size / size)
+			zoom_last_position = position
+		return
 	if not drawing:
 		return
 	var point := _image_point(position)
@@ -152,8 +190,14 @@ func _move(position: Vector2) -> void:
 		_dab(last_point.lerp(point, float(i) / steps))
 	last_point = point
 	_refresh()
+	drawing_changed.emit()
 
 func _finish() -> void:
+	if zoom_dragging:
+		zoom_dragging = false
+		if not zoom_moved:
+			set_zoom(zoom_factor * 2.0, _image_point(zoom_last_position))
+		return
 	if drawing:
 		drawing = false
 		drawing_changed.emit()
@@ -328,7 +372,7 @@ func _refresh() -> void:
 
 func _draw() -> void:
 	if artwork_texture:
-		draw_texture_rect(artwork_texture, Rect2(Vector2.ZERO, size), false)
+		draw_texture_rect_region(artwork_texture, Rect2(Vector2.ZERO, size), _visible_image_rect())
 
 func save_artwork(path: String) -> Error:
 	return artwork.save_png(path)
@@ -342,7 +386,9 @@ func create_signed_image(profile_name: String, grade: String) -> Image:
 	var footer := Control.new()
 	footer.set_script(preload("res://scripts/signature_footer.gd"))
 	footer.set("profile_name", profile_name)
-	footer.set("grade", grade)
+	footer.set("grade", tr(grade))
+	footer.set("caption", tr("LITTLE LEOPARD ARTIST"))
+	footer.set("pride", tr("Made with pride!"))
 	footer.size = Vector2(WIDTH, 80)
 	viewport.add_child(footer)
 	add_child(viewport)

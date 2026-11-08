@@ -26,6 +26,10 @@ window/size/window_height_override=800
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[internationalization]
+
+locale/translations=PackedStringArray("res://assets/translations.en.translation", "res://assets/translations.es.translation")
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

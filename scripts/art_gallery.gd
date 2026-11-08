@@ -10,10 +10,12 @@ var previous_button: Button
 var next_button: Button
 var export_button: Button
 var export_dialog: FileDialog
+var export_notice: AcceptDialog
 
 func _ready() -> void:
 	title = "My Art Gallery"
 	ok_button_text = "BACK TO DRAWING"
+	TouchDialog.configure(self)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 8)
 	add_child(layout)
@@ -63,10 +65,15 @@ func _ready() -> void:
 	export_dialog.add_filter("*.png", "PNG image")
 	export_dialog.file_selected.connect(_export_to_path)
 	add_child(export_dialog)
+	export_notice = AcceptDialog.new()
+	export_notice.title = "Picture export"
+	export_notice.ok_button_text = "OK"
+	TouchDialog.configure(export_notice)
+	add_child(export_notice)
 
 func open_gallery() -> void:
 	refresh()
-	popup_centered_ratio(0.9)
+	popup_centered_ratio(0.82)
 
 func refresh() -> void:
 	files.clear()
@@ -113,10 +120,10 @@ func _show_artwork(index: int) -> void:
 	var error := image.load(files[index]["path"])
 	if error != OK or image.is_empty():
 		push_error("Could not load artwork %s: %s" % [files[index]["name"], error_string(error)])
-		message.text = "Picture %d of %d could not be opened. Try another picture." % [index + 1, files.size()]
+		message.text = tr("Picture %d of %d could not be opened. Try another picture.") % [index + 1, files.size()]
 	else:
 		preview.texture = ImageTexture.create_from_image(image)
-		message.text = "Picture %d of %d  •  Newest first" % [index + 1, files.size()]
+		message.text = tr("Picture %d of %d  •  Newest first") % [index + 1, files.size()]
 	_update_navigation()
 
 func _update_navigation() -> void:
@@ -145,7 +152,9 @@ func _export_current() -> void:
 		if not error.is_empty():
 			_export_error(error)
 			return
-		message.text = "Saved to Pictures / Little Leopard Canvas. Open your Photos app to share it."
+		message.text = "Saved to DCIM / Camera. Check your tablet's gallery."
+		export_notice.dialog_text = tr("Picture exported!") + "\n" + tr("Look in your tablet's gallery or Files under DCIM / Camera.")
+		export_notice.popup_centered()
 	else:
 		export_dialog.current_file = path.get_file()
 		export_dialog.popup_centered_ratio(0.8)
@@ -160,13 +169,15 @@ func _export_to_path(destination: String) -> void:
 		return
 	var error := DirAccess.copy_absolute(ProjectSettings.globalize_path(source), destination)
 	if error != OK:
-		_export_error("Could not export the picture: " + error_string(error))
+		_export_error(tr("Could not export the picture: %s") % error_string(error))
 		return
 	message.text = "Picture exported. You can share it from your files."
 
 func _export_error(details: String) -> void:
 	push_error("Artwork export failed: " + details)
-	message.text = details + " Ask an adult for help."
+	message.text = tr(details) + " " + tr("Ask an adult for help.")
+	export_notice.dialog_text = tr(details) + "\n" + tr("Please ask an adult for help.")
+	export_notice.popup_centered()
 
 func _show_previous() -> void:
 	_show_artwork(current_index - 1)

@@ -88,13 +88,14 @@ jobs:
           set -euo pipefail
           godot="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
           "$godot" --headless --path . --import
-          for test in test_canvas test_profiles test_gallery; do
+          for test in test_canvas test_profiles test_gallery test_settings; do
             output="$RUNNER_TEMP/$test.log"
             "$godot" --headless --path . --script "res://tests/$test.gd" --quit-after 600 2>&1 | tee "$output"
             case "$test" in
               test_canvas) marker="Canvas tests passed." ;;
               test_profiles) marker="Profile persistence tests passed." ;;
               test_gallery) marker="Gallery tests passed." ;;
+              test_settings) marker="Settings and first-time setup tests passed." ;;
             esac
             grep -Fx "$marker" "$output"
           done

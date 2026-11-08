@@ -42,11 +42,20 @@ func _run() -> void:
 	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path)) == OK)
 
 	var scene: Control = load("res://main.tscn").instantiate()
+	scene.suppress_setup = true
 	root.add_child(scene)
 	await process_frame
 	scene.profile_store = Store.new(test_path)
 	scene._refresh_profile_button()
 	scene._open_profiles()
+	assert(not scene.profile_form.visible)
+	await process_frame
+	var compact_height: int = scene.profile_dialog.size.y
+	scene._new_profile()
+	assert(scene.profile_form.visible and not scene.delete_profile_button.visible)
+	await process_frame
+	assert(scene.profile_dialog.size.y > compact_height)
+	assert(scene.profile_form.get_global_rect().end.y <= scene.profile_dialog.size.y)
 	scene.profile_name_input.text = "Jordan"
 	scene.grade_picker.select(0)
 	scene._save_profile()
@@ -56,6 +65,7 @@ func _run() -> void:
 	scene._save_profile()
 	assert(scene.profile_store.selected == 0)
 	assert(scene.artist_caption.text.contains("Jordan"))
+	assert(scene.profile_form.visible and scene.delete_profile_button.visible)
 	scene._new_profile()
 	scene.profile_name_input.text = "Taylor"
 	scene.grade_picker.select(7)
@@ -64,12 +74,25 @@ func _run() -> void:
 	assert(scene.profile_picker.item_count == 3)
 	scene._profile_chosen(1)
 	assert(scene.profile_store.selected == 0)
+	assert(scene.profile_form.visible and scene.profile_name_input.text == "Jordan")
 	scene.profile_name_input.text = "Jordan R"
 	scene._save_profile()
 	assert(scene.profile_store.profiles[0]["name"] == "Jordan R")
 	scene._delete_profile()
 	assert(scene.profile_store.selected == -1)
 	assert(scene.profile_store.profiles.size() == 1)
+	assert(not scene.profile_form.visible)
+	scene._profile_chosen(1)
+	assert(scene.profile_form.visible and scene.profile_name_input.text == "Taylor")
+	scene._profile_chosen(0)
+	assert(not scene.profile_form.visible)
+	scene._new_profile()
+	assert(scene.profile_form.visible and scene.profile_name_input.text.is_empty())
+	scene.profile_dialog.hide()
+	scene._open_profiles()
+	assert(not scene.profile_form.visible)
+	await process_frame
+	assert(scene.profile_dialog.size.y == compact_height)
 	var ui_saved := Store.new(test_path)
 	assert(ui_saved.load_profiles() == OK)
 	assert(ui_saved.profiles[0]["name"] == "Taylor")

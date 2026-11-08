@@ -7,6 +7,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var scene: Control = load("res://main.tscn").instantiate()
+	scene.suppress_setup = true
 	root.add_child(scene)
 	await process_frame
 	await process_frame
@@ -36,8 +37,16 @@ func _run() -> void:
 	scene.page_dialog.hide()
 	for button in scene.tool_buttons.values():
 		assert(button.text.is_empty() and button.icon != null)
+	var choices: PanelContainer = scene.find_child("ChoicesPanel", true, false)
+	assert(choices.size.x <= 190)
+	for button in scene.color_buttons:
+		assert(button.size.x >= 54 and button.size.y >= 54)
+		assert(choices.get_global_rect().encloses(button.get_global_rect()))
 	for button in scene.stamp_buttons.values():
 		assert(button.text.is_empty() and button.icon != null)
+		assert(button.size.x >= 54 and button.size.y >= 56)
+		assert(button.get_theme_constant("icon_max_width") >= 44)
+		assert(choices.get_global_rect().encloses(button.get_global_rect()))
 		assert(button.icon_alignment == HORIZONTAL_ALIGNMENT_CENTER)
 		var image: Image = button.icon.get_image()
 		var bounds := image.get_used_rect()
@@ -45,7 +54,13 @@ func _run() -> void:
 		assert(absi(bounds.position.y - (image.get_height() - bounds.end.y)) <= 1)
 	var badge: TextureRect = scene.find_child("AppBadge", true, false)
 	assert(badge.texture.resource_path == "res://assets/app_icon/little_leopard_canvas.png")
-	var header_buttons := ["HeaderProfile", "HeaderGallery", "HeaderNew", "HeaderUndo", "HeaderClear", "HeaderSave"]
+	var title: Label = scene.find_child("AppTitle", true, false)
+	var title_font: FontVariation = title.get_theme_font("font")
+	assert(title_font.base_font.resource_path == "res://assets/fonts/Fredoka.ttf")
+	assert(title_font.variation_opentype[TextServerManager.get_primary_interface().name_to_tag("wght")] == 700)
+	assert(title.size.x >= title.get_minimum_size().x)
+	assert(title.get_global_rect().end.x <= scene.find_child("HeaderSettings", true, false).get_global_rect().position.x)
+	var header_buttons := ["HeaderSettings", "HeaderGallery", "HeaderNew", "HeaderUndo", "HeaderClear", "HeaderSave"]
 	for button_name in header_buttons:
 		var header_button: Button = scene.find_child(button_name, true, false)
 		assert(header_button != null and header_button.icon != null)
@@ -59,6 +74,9 @@ func _run() -> void:
 		assert(header_button.get_theme_constant("h_separation") == 6)
 	var undo_button: Button = scene.find_child("HeaderUndo", true, false)
 	assert(undo_button.text.is_empty() and undo_button.icon_alignment == HORIZONTAL_ALIGNMENT_CENTER)
+	var clear_button: Button = scene.find_child("HeaderClear", true, false)
+	assert(absi(undo_button.get_index() - clear_button.get_index()) > 1)
+	assert(scene.tool_buttons.has("zoom"))
 	for button in scene.find_children("*", "Button", true, false):
 		if button.is_visible_in_tree():
 			var bounds: Rect2 = button.get_global_rect()
@@ -82,6 +100,60 @@ func _run() -> void:
 	assert(canvas.artwork.get_pixel(100, 100).is_equal_approx(Color.RED))
 	canvas.undo()
 	assert(canvas.artwork.get_pixel(100, 100).is_equal_approx(initial))
+
+	canvas.set_tool("zoom")
+	canvas._start(canvas.size * Vector2(0.75, 0.5))
+	canvas._finish()
+	assert(canvas.zoom_factor == 2.0)
+	assert(canvas._image_point(canvas.size / 2).is_equal_approx(Vector2(630, 260)))
+	canvas._start(canvas.size / 2)
+	canvas._move(canvas.size / 2 + Vector2(40, 0))
+	canvas._finish()
+	assert(canvas.zoom_factor == 2.0 and canvas.zoom_center.x < 630)
+	canvas.set_zoom(4.0, Vector2(-100, 1000))
+	assert(canvas._visible_image_rect().position.is_equal_approx(Vector2(0, 390)))
+	canvas.set_zoom(2.0, Vector2(630, 260))
+	canvas.set_tool("brush")
+	canvas._start(canvas.size / 2)
+	canvas._finish()
+	assert(canvas.artwork.get_pixel(630, 260).is_equal_approx(Color.RED))
+	assert(canvas.artwork.get_pixel(420, 260).is_equal_approx(Color.WHITE))
+	canvas.undo()
+	canvas.set_tool("stamp")
+	canvas._start(canvas.size / 2)
+	assert(not canvas.artwork.get_pixel(630, 260).is_equal_approx(Color.WHITE))
+	canvas.undo()
+	canvas.set_tool("brush")
+	canvas._start(canvas.size / 2)
+	canvas._finish()
+	canvas.set_tool("eraser")
+	canvas._start(canvas.size / 2)
+	canvas._finish()
+	assert(canvas.artwork.get_pixel(630, 260).is_equal_approx(Color.WHITE))
+	canvas.undo()
+	assert(canvas.artwork.get_pixel(630, 260).is_equal_approx(Color.RED))
+	var zoom_output := "user://test_zoom_canvas.png"
+	assert(canvas.save_artwork(zoom_output) == OK)
+	var zoom_saved := Image.load_from_file(zoom_output)
+	assert(zoom_saved.get_size() == Vector2i(canvas.WIDTH, canvas.HEIGHT))
+	assert(zoom_saved.get_pixel(630, 260).is_equal_approx(Color.RED))
+	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(zoom_output)) == OK)
+	canvas.undo()
+	var placed := []
+	canvas.text_placement_requested.connect(func(point: Vector2): placed.append(point))
+	canvas.text_image = Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	canvas.text_image.fill(Color.RED)
+	canvas.set_tool("text")
+	canvas._start(canvas.size / 2)
+	assert(placed[0].is_equal_approx(Vector2(630, 260)))
+	assert(canvas.artwork.get_pixel(630, 260).is_equal_approx(Color.RED))
+	canvas.undo()
+	canvas.set_tool("fill")
+	canvas._start(canvas.size / 2)
+	assert(canvas.artwork.get_pixel(630, 260).is_equal_approx(Color.RED))
+	canvas.undo()
+	canvas.set_page(null)
+	assert(canvas.zoom_factor == 1.0)
 
 	canvas.set_tool("fill")
 	canvas._start(Vector2(20, 20))

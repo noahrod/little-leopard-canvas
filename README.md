@@ -10,12 +10,12 @@ white, and orange-red.
 ## Current status
 
 The app runs in the Godot editor and has an offline drawing canvas, local
-profiles, signed PNG saves, an in-app gallery, and user-initiated picture
-export. It is designed for a
-landscape tablet, but the current project settings do **not** explicitly lock
-the handheld orientation. An Android export preset exists, but an installed
-Fire-tablet build and touch interaction have not been verified here. This is
-not yet a finished distribution or sharing workflow.
+profiles, English and Spanish settings, a first-time setup wizard, signed PNG
+saves, an in-app gallery, and user-initiated picture export. It is designed
+for a landscape tablet, but the current project settings do **not**
+explicitly lock the handheld orientation. The app has been tested by the
+family on a Fire tablet; the latest changes still need device verification.
+This is not yet a finished distribution or sharing workflow.
 
 ## Run the project
 
@@ -90,9 +90,9 @@ or profile export.
 For reliable upgrades and distribution, configure a persistent release signing
 key using secure GitHub Secrets and review the package identifier and version
 settings before publishing. Do not commit keys or passwords to the repository.
-A local debug APK export and signature check passed with Godot 4.7.2, but the
-workflow itself has not yet been run on GitHub. Fire-tablet installation and
-touch behavior remain unverified.
+A local debug APK export and signature check passed with Godot 4.7.2. Verify
+the latest workflow changes, installation, and touch behavior on the target
+Fire tablet.
 
 ## How to use it
 
@@ -102,7 +102,7 @@ touch behavior remain unverified.
   **Art Club** (the app icon), or **Blank**. Use the arrows to see more pages.
   School opens first. Starting a page asks for confirmation and clears the
   current drawing and its undo history, even when choosing the same page.
-- Choose **Brush**, **Fill**, **Stamp**, **Eraser**, or **Text** using the
+- Choose **Brush**, **Fill**, **Stamp**, **Eraser**, **Text**, or **Zoom** using the
   icons on the left. The eraser restores the original page under the erased
   area. For text, type words, tap **Place Words**, then tap the canvas to
   place them. Choose a color before preparing the text. Undo removes a
@@ -112,40 +112,62 @@ touch behavior remain unverified.
   The Blank page remains completely drawable.
 - Choose a palette color or use **More Colors** for additional light/dark
   shades and a color wheel. **Glitter** adds a static sparkle pattern to brush,
-  fill, and stamp marks. Choose S, M, or L for brush and stamp size.
+  fill, and stamp marks. The narrow three-column palette leaves more space for
+  the page while keeping larger color and stamp touch targets. Choose S, M,
+  or L for brush and stamp size.
 - Stamps include paw, star, heart, leopard head, sun, and flower. Tapping a
   stamp also selects the stamp tool.
+- Tap the magnifying glass, then tap the canvas to zoom in (up to 4×); drag
+  the canvas to move around. Tap the **minus** button to zoom out. Select
+  another tool to draw or fill while zoomed. A new page resets the zoom;
+  saved pictures always include the entire page.
 - The curved-arrow **Undo** button keeps up to 12 changes. **Clear** asks for confirmation and can be
-  undone until it falls out of the undo history.
+  undone until it falls out of the undo history. Undo and Clear are separated
+  in the header to reduce accidental taps.
 
 Fill colors a connected region of similar color. The coloring pages were
 derived from existing images, so small shapes or gaps in outlines can make
 some areas difficult to fill or allow a fill to spread.
 
-### Profiles and saved art
+### Setup, language, and saved art
 
-1. Tap **Profiles** and create or select an artist. Enter a name of up to
-   32 characters and select 4K, 5K, or 1st through 5th grade. Multiple
-   profiles can be stored on the same device.
+On a new installation, a welcome wizard displays the app icon, asks for
+English or Spanish, and requires an artist name and grade before drawing.
+An existing installation with profiles or saved artwork skips the wizard and
+keeps its data. If setup was interrupted after a profile was saved, select
+that artist to finish.
+
+1. Tap **Settings** to choose English or Spanish. Under **Manage artists**,
+   select an artist, or tap **New Artist** to reveal
+   the creation form. Enter a name of up to 32 characters and select 4K, 5K,
+   or 1st through 5th grade. Selecting an existing artist also shows their
+   details for editing. The new-artist fields stay hidden until **New Artist**
+   is tapped. Multiple profiles can be stored on the same device.
 2. Tap **Save Art**. A selected profile is required. The saved PNG gets a
    signature strip **below** the drawing showing the app icon and selected name and grade;
-   the editable canvas itself is unchanged.
+   the editable canvas itself is unchanged. A large confirmation appears after
+   saving. Repeated taps without a new edit, artist, or language change reopen the
+   confirmation instead of creating another copy during that app session.
+   The signature text uses the chosen language.
 3. Tap **Gallery** to view saved pictures, newest first, using **Newer** and
    **Older**. The gallery includes older unsigned artwork and artwork from
    every profile on the device; it is not filtered by artist. Viewing a
    picture does not change the active canvas.
 4. To share a picture outside the app, select it in Gallery and tap **Export**.
    On Android 10 or later this requests a copy in
-   `Pictures/Little Leopard Canvas`; open the device's Photos or gallery app
-   to share it. Older Android versions report that this export is unsupported.
+   `DCIM/Camera`, intended to make it easier to find in the camera roll;
+   open the device's Photos, gallery, or Files app to share it. Older Android
+   versions report that this export is unsupported.
    On the Web, Export requests a PNG download; on desktop, it asks where to
-   save a copy. Android export and Fire tablet photo-app visibility still need
-   testing on the target device.
+   save a copy. Export now shows a prominent success or error message. The
+   cause of the reported missing pictures is not yet confirmed, and Android
+   export and Fire tablet gallery visibility still need testing on the device.
 
 Profiles can be edited or deleted; deleting one does not delete or rename
 existing pictures. Profile data and pictures are local to the app. A child's
 name and grade appear in the saved image, so they will be visible to anyone
 the picture is shared with. The app does not currently upload anything.
+Settings and Gallery use larger close buttons and action buttons for touch.
 
 ## Storage and limitations
 
@@ -159,6 +181,7 @@ there is no bulk backup or profile export.
 | File in `user://` | Purpose |
 | --- | --- |
 | `profiles.json` | Local list of names/grades and selected profile index. |
+| `settings.cfg` | Selected language and first-time setup completion. |
 | `artwork_<timestamp>_<ticks>.png` | Each current signed save; older versions may lack the ticks suffix or signature. |
 | `last_art.png` | Latest signed PNG copy; not shown as a separate gallery item. |
 
@@ -186,11 +209,20 @@ layout, file persistence, rendering, and touch use need device testing.
 | [`scripts/drawing_canvas.gd`](scripts/drawing_canvas.gd) | Input, 840 × 520 raster canvas, fill, brush, stamps, eraser, undo, and signed-image composition. |
 | [`scripts/signature_footer.gd`](scripts/signature_footer.gd) | Draws the signature strip into a `SubViewport`; signed output is 840 × 600. |
 | [`scripts/profile_store.gd`](scripts/profile_store.gd) | Profile validation, local JSON loading, and writes via a temporary file and rename. |
+| [`scripts/settings_store.gd`](scripts/settings_store.gd) | Language and setup state, validated and written through a temporary file. |
+| [`assets/translations.csv`](assets/translations.csv) | English/Spanish strings imported by Godot into translation resources. |
 | [`scripts/art_gallery.gd`](scripts/art_gallery.gd) | Local PNG enumeration, preview, navigation, and errors. |
 | [`scripts/art_export.gd`](scripts/art_export.gd) | Android 10+ MediaStore copy to the public pictures library. |
+| [`scripts/touch_dialog.gd`](scripts/touch_dialog.gd) | Larger embedded-window close icons and dialog action buttons. |
 | [`assets/`](assets/) | Original school images, derived coloring pages, and UI icons. |
 | [`tests/`](tests/) | Godot script-based regression tests. |
 | [`addons/ai_copilot/`](addons/ai_copilot/) | Editor add-on, separate from the app's drawing features. |
+
+Godot imports the CSV into generated `.translation` resources, which are
+ignored by Git. After a fresh checkout, import the project before running tests
+or exporting; edit the CSV rather than the generated translations. Profile
+grades remain stored using their original English identifiers and are
+translated for display, preserving existing profiles.
 
 The canvas maintains `base_image` (original page), `outline_mask` (immutable
 dark page pixels), `artwork` (visible pixels), and `fill_image` (flat-color
@@ -200,10 +232,14 @@ Undo stores snapshots of both working images. When modifying drawing tools,
 keep these images synchronized, and verify undo, eraser, fill, glitter, and
 PNG output. Page selection resets the base and history. The canvas handles
 one active touch index; its desktop mouse input is gated on touchscreen
-availability.
+availability. Zoom changes only the rendered source rectangle and input
+mapping, not the underlying image or saved output.
 
 The signed-save flow snapshots the artwork, renders a footer using the
 rendering server, and writes both a timestamped PNG and `last_art.png`.
+The UI tracks the saved artwork revision, profile, and language to prevent repeated
+unchanged saves in the same session; signing snapshots the image and revision
+before awaiting the rendering server.
 Treat user-facing save and profile errors explicitly; a failed profile load
 disables profile changes rather than overwriting the existing file. Avoid
 changing on-disk formats or deleting user artwork without a migration and an
@@ -211,6 +247,9 @@ explicit product decision.
 
 ### Assets
 
+- The header title uses the rounded Fredoka typeface at bold weight. The
+  bundled font in [`assets/fonts/`](assets/fonts/) is licensed under the
+  [SIL Open Font License](assets/fonts/Fredoka-OFL.txt).
 - The original school images in [`assets/`](assets/) are retained. Do not
   replace or delete them when adjusting coloring pages.
 - Current pages are `assets/coloring/school_clean.png`,
@@ -248,6 +287,7 @@ godot --headless --path . --editor --quit
 godot --headless --path . --script res://tests/test_canvas.gd
 godot --headless --path . --script res://tests/test_profiles.gd
 godot --headless --path . --script res://tests/test_gallery.gd
+godot --headless --path . --script res://tests/test_settings.gd
 ```
 
 The gallery test intentionally opens a corrupt PNG to test error handling;
@@ -257,11 +297,14 @@ The signature test needs a working graphical renderer:
 ```sh
 godot --path . --script res://tests/test_signature.gd
 godot --path . --script res://tests/test_text.gd
+godot --path . --script res://tests/test_save.gd
 ```
 
-The tests cover drawing operations, fill boundaries, undo, layout bounds,
-profile validation and persistence, gallery navigation and export, text
-placement, and rendered signatures. They do not replace hands-on tablet testing. Before distribution,
-check the landscape layout and dialogs, touch drawing, fill speed, profile
-keyboard/selection, save and gallery after an app restart, and Android export
-and installation on the target Fire tablet.
+The save and settings tests intentionally attempt writes to missing folders to
+verify error handling. The tests cover drawing operations, fill boundaries,
+zoom, undo, layout bounds, first-time setup and language persistence, profile
+validation, gallery navigation and export, text placement, and rendered
+signatures. They do not replace hands-on tablet testing. Before distribution,
+check setup and both languages, the landscape layout and dialogs, touch
+drawing, fill speed, profile keyboard/selection, save and gallery after an app
+restart, and Android export and installation on the target Fire tablet.
