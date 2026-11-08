@@ -650,6 +650,7 @@ func _build_text_dialog() -> void:
 	text_dialog = ConfirmationDialog.new()
 	text_dialog.title = "Add words to your art"
 	text_dialog.ok_button_text = "PLACE WORDS"
+	TouchDialog.configure(text_dialog)
 	add_child(text_dialog)
 	text_input = LineEdit.new()
 	text_input.placeholder_text = "Type your words"

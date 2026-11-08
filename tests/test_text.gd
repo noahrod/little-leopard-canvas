@@ -5,6 +5,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var scene: Control = load("res://main.tscn").instantiate()
+	scene.suppress_setup = true
 	root.add_child(scene)
 	await process_frame
 	await process_frame

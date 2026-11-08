@@ -167,7 +167,8 @@ Profiles can be edited or deleted; deleting one does not delete or rename
 existing pictures. Profile data and pictures are local to the app. A child's
 name and grade appear in the saved image, so they will be visible to anyone
 the picture is shared with. The app does not currently upload anything.
-Settings and Gallery use larger close buttons and action buttons for touch.
+Settings, Gallery, and the Text dialog use larger close buttons, title bars,
+and action buttons for touch.
 
 ## Storage and limitations
 

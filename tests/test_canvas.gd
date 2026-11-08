@@ -35,6 +35,23 @@ func _run() -> void:
 	await process_frame
 	assert(scene.page_dialog.visible and scene.selected_page == 0)
 	scene.page_dialog.hide()
+	scene._open_text()
+	await process_frame
+	var dialog: ConfirmationDialog = scene.text_dialog
+	var dialog_theme: Theme = dialog.theme
+	var close_size := dialog_theme.get_icon("close", "Window").get_size()
+	var title_height := dialog_theme.get_constant("title_height", "Window")
+	var close_y := dialog_theme.get_constant("close_v_offset", "Window")
+	var close_x := dialog_theme.get_constant("close_h_offset", "Window")
+	var border: StyleBoxFlat = dialog_theme.get_stylebox("embedded_border", "Window")
+	assert(close_size.x >= 48 and close_size.y >= 48)
+	assert(title_height >= 64 and border.expand_margin_top >= title_height)
+	assert(close_y <= title_height and close_y >= close_size.y and close_x >= close_size.x)
+	assert(dialog_theme.get_font_size("title_font_size", "Window") >= 24)
+	assert(dialog.get_ok_button().size.y >= 56 and dialog.get_cancel_button().size.y >= 56)
+	assert(dialog.position.y - title_height >= 0)
+	assert(dialog.position.y + dialog.size.y <= scene.size.y)
+	dialog.hide()
 	for button in scene.tool_buttons.values():
 		assert(button.text.is_empty() and button.icon != null)
 	var choices: PanelContainer = scene.find_child("ChoicesPanel", true, false)
